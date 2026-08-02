@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Noticias</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="theme-color" content="#12213a" />
+<style>
+  :root {
+    --bg: #0c1424;
+    --card: #16233a;
+    --border: #263453;
+    --gold: #e8c468;
+    --text: #eef1f6;
+    --muted: #9aa7bd;
+    --danger: #e0685f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 2rem;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0.9rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 {
+    font-size: 1.15rem;
+    margin: 0;
+    color: var(--gold);
+    letter-spacing: 0.02em;
+  }
+  #refresh {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  #refresh:active { opacity: 0.7; }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.75rem;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .card.leaving { opacity: 0; transform: translateY(-6px); }
+  .meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .source {
+    background: var(--border);
+    color: var(--gold);
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .topic {
+    color: var(--muted);
+  }
+  .card a.title {
+    color: var(--text);
+    text-decoration: none;
+    font-size: 1.02rem;
+    font-weight: 600;
+    line-height: 1.35;
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+  .card a.title:active { color: var(--gold); }
+  .summary {
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.4;
+    margin: 0 0 0.7rem;
+  }
+  .actions {
+    display: flex;
+    gap: 0.6rem;
+  }
+  .actions button {
+    flex: 1;
+    padding: 0.55rem 0;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .actions button.like { color: var(--gold); border-color: var(--gold); }
+  .actions button.dismiss { color: var(--danger); border-color: var(--danger); }
+  .actions button:active { opacity: 0.6; }
+  #status {
+    text-align: center;
+    color: var(--muted);
+    padding: 2rem 1rem;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Noticias</h1>
+  <button id="refresh" type="button">↻ actualizar</button>
+</header>
+<main id="feed"></main>
+<div id="status"></div>
+
+<script>
+const SUPABASE_URL = 'https://zqwkznlgbkofsrygqezk.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpxd2t6bmxnYmtvZnNyeWdxZXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MTAzMTAsImV4cCI6MjA5MTA4NjMxMH0.GNt-G_RUcxLYCpSqAKKI4KxNU87bBEQAJVCr88R2wQE';
+const FEED_LIMIT = 30;
+
+const feedEl = document.getElementById('feed');
+const statusEl = document.getElementById('status');
+const refreshBtn = document.getElementById('refresh');
+
+const SOURCE_LABELS = {
+  clarin: 'Clarín',
+  lanacion: 'La Nación',
+  iprofesional: 'iProfesional',
+  infobae: 'Infobae',
+  ambito: 'Ámbito',
+  tn: 'TN',
+};
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diffMin = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (diffMin < 1) return 'recién';
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `hace ${diffH} h`;
+  return `hace ${Math.round(diffH / 24)} d`;
+}
+
+async function fetchFeed() {
+  statusEl.textContent = 'Cargando...';
+  feedEl.innerHTML = '';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}`, {
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    renderFeed(data.feed || []);
+  } catch (err) {
+    statusEl.textContent = `No se pudo cargar el feed (${err.message}). Probá actualizar de nuevo.`;
+  }
+}
+
+function renderFeed(items) {
+  if (!items.length) {
+    statusEl.textContent = 'No hay noticias recientes todavía. news-sync corre cada 30-60 min.';
+    return;
+  }
+  statusEl.textContent = '';
+  for (const item of items) {
+    feedEl.appendChild(renderCard(item));
+  }
+}
+
+function renderCard(item) {
+  const card = document.createElement('article');
+  card.className = 'card';
+  card.dataset.id = item.id;
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const source = document.createElement('span');
+  source.className = 'source';
+  source.textContent = SOURCE_LABELS[item.source] || item.source;
+  meta.appendChild(source);
+  if (item.topic_label) {
+    const topic = document.createElement('span');
+    topic.className = 'topic';
+    topic.textContent = item.topic_label;
+    meta.appendChild(topic);
+  }
+  const time = document.createElement('span');
+  time.className = 'topic';
+  time.textContent = timeAgo(item.published_at);
+  meta.appendChild(time);
+  card.appendChild(meta);
+
+  const link = document.createElement('a');
+  link.className = 'title';
+  link.href = item.url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = item.title;
+  link.addEventListener('click', () => recordInteraction(item.id, 'view'));
+  card.appendChild(link);
+
+  if (item.summary) {
+    const summary = document.createElement('p');
+    summary.className = 'summary';
+    summary.textContent = item.summary;
+    card.appendChild(summary);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+
+  const likeBtn = document.createElement('button');
+  likeBtn.type = 'button';
+  likeBtn.className = 'like';
+  likeBtn.textContent = '👍 me interesa';
+  likeBtn.addEventListener('click', () => handleAction(item.id, 'like', card));
+  actions.appendChild(likeBtn);
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'dismiss';
+  dismissBtn.textContent = '👎 no';
+  dismissBtn.addEventListener('click', () => handleAction(item.id, 'dismiss', card));
+  actions.appendChild(dismissBtn);
+
+  card.appendChild(actions);
+  return card;
+}
+
+function handleAction(articleId, action, card) {
+  recordInteraction(articleId, action);
+  card.classList.add('leaving');
+  setTimeout(() => card.remove(), 150);
+}
+
+function recordInteraction(articleId, action) {
+  fetch(`${SUPABASE_URL}/rest/v1/rpc/news_record_interaction`, {
+    method: 'POST',
+    headers: {
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${ANON_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_article_id: articleId, p_action: action }),
+  }).catch(() => {});
+}
+
+refreshBtn.addEventListener('click', fetchFeed);
+fetchFeed();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
