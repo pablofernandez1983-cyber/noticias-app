@@ -237,6 +237,61 @@
     color: var(--muted);
     font-size: 0.85rem;
   }
+  #userOverlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 1.5rem;
+  }
+  #userOverlay.open { display: flex; }
+  #userPanel { width: 100%; max-width: 360px; text-align: center; }
+  #userPanel h2 { color: var(--gold); margin: 0 0 0.4rem; font-size: 1.3rem; }
+  #userPanel p { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.4rem; }
+  #userPabloBtn {
+    width: 100%;
+    padding: 0.9rem;
+    border-radius: 10px;
+    border: 1px solid var(--gold);
+    background: var(--gold);
+    color: #1a1305;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 1.2rem;
+  }
+  #userDivider { color: var(--muted); font-size: 0.78rem; margin-bottom: 1rem; }
+  #userForm { display: flex; gap: 0.5rem; }
+  #userNameInput {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.7rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  #userForm button {
+    padding: 0.7rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: var(--text);
+    background: transparent;
+    font-weight: 600;
+  }
+  #changeUserBtn {
+    display: block;
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.6rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: transparent;
+    font-size: 0.85rem;
+  }
 </style>
 </head>
 <body>
@@ -257,7 +312,21 @@
   <div id="settingsPanel">
     <h2>Fuentes</h2>
     <div id="settingsBody">Cargando...</div>
+    <button id="changeUserBtn" type="button">Cambiar de usuario</button>
     <button id="settingsClose" type="button">Cerrar</button>
+  </div>
+</div>
+
+<div id="userOverlay">
+  <div id="userPanel">
+    <h2>¿Quién sos?</h2>
+    <p>Cada usuario tiene su propio aprendizaje de preferencias.</p>
+    <button id="userPabloBtn" type="button">Soy Pablo</button>
+    <div id="userDivider">— o —</div>
+    <form id="userForm">
+      <input id="userNameInput" placeholder="Tu nombre" required />
+      <button type="submit">Entrar</button>
+    </form>
   </div>
 </div>
 
@@ -287,8 +356,52 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsOverlay = document.getElementById('settingsOverlay');
 const settingsBody = document.getElementById('settingsBody');
 const settingsClose = document.getElementById('settingsClose');
+const changeUserBtn = document.getElementById('changeUserBtn');
 const categoryTitleEl = document.getElementById('categoryTitle');
 const categoryDotsEl = document.getElementById('categoryDots');
+const userOverlay = document.getElementById('userOverlay');
+const userPabloBtn = document.getElementById('userPabloBtn');
+const userForm = document.getElementById('userForm');
+const userNameInput = document.getElementById('userNameInput');
+
+// Multi-usuario: cada quien aprende por su cuenta (alpha/beta y "ya visto" son por
+// usuario). En este dispositivo, una vez elegido, queda guardado en localStorage y
+// no se vuelve a preguntar — "cambiar de usuario" en ⚙ borra ese dato para re-elegir.
+const USUARIO_KEY = 'noticias_usuario';
+let usuario = localStorage.getItem(USUARIO_KEY) || null;
+
+function slugifyUsuario(name) {
+  const base = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return base || 'usuario';
+}
+
+function ensureUsuario() {
+  return new Promise((resolve) => {
+    if (usuario) {
+      resolve(usuario);
+      return;
+    }
+    userOverlay.classList.add('open');
+    const finish = (name) => {
+      usuario = slugifyUsuario(name);
+      localStorage.setItem(USUARIO_KEY, usuario);
+      userOverlay.classList.remove('open');
+      resolve(usuario);
+    };
+    userPabloBtn.onclick = () => finish('pablo');
+    userForm.onsubmit = (e) => {
+      e.preventDefault();
+      const name = userNameInput.value.trim();
+      if (!name) return;
+      finish(name);
+    };
+  });
+}
 
 // "Para vos" (feed general) + las categorías detectadas de tus intereses (news_interest_seeds).
 // Swipe horizontal (izquierda/derecha) navega entre estas, como pasar de "Para ti" a
@@ -349,7 +462,7 @@ function updateCategoryHeader() {
 async function fetchBatch() {
   const seedId = categories[currentCategoryIndex]?.id;
   const seedParam = seedId != null ? `&seed_id=${seedId}` : '';
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}${seedParam}`, {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}${seedParam}&usuario=${encodeURIComponent(usuario)}`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
   });
   const data = await res.json();
@@ -412,6 +525,7 @@ function switchCategory(newIndex) {
 }
 
 async function start() {
+  await ensureUsuario();
   await loadCategories();
   await loadCategoryFeed();
 }
@@ -573,7 +687,7 @@ function commitAdvance(direction) {
 }
 
 function recordInteraction(articleId, action, weight) {
-  const body = { p_article_id: articleId, p_action: action };
+  const body = { p_article_id: articleId, p_action: action, p_usuario: usuario };
   if (typeof weight === 'number') body.p_weight = weight;
   fetch(`${SUPABASE_URL}/rest/v1/rpc/news_record_interaction`, {
     method: 'POST',
@@ -857,6 +971,12 @@ settingsBtn.addEventListener('click', openSettings);
 settingsClose.addEventListener('click', () => settingsOverlay.classList.remove('open'));
 settingsOverlay.addEventListener('click', (e) => {
   if (e.target === settingsOverlay) settingsOverlay.classList.remove('open');
+});
+changeUserBtn.addEventListener('click', () => {
+  localStorage.removeItem(USUARIO_KEY);
+  usuario = null;
+  settingsOverlay.classList.remove('open');
+  start();
 });
 
 refreshBtn.addEventListener('click', start);
