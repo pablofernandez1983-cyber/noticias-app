@@ -231,7 +231,10 @@ function renderCard(item) {
   link.target = '_blank';
   link.rel = 'noopener';
   link.textContent = item.title;
-  link.addEventListener('click', () => recordInteraction(item.id, 'view'));
+  link.addEventListener('click', () => {
+    recordInteraction(item.id, 'view');
+    trackReadDwell(item.id);
+  });
   card.appendChild(link);
 
   if (item.summary) {
@@ -330,6 +333,30 @@ function attachSwipe(card, item) {
   card.addEventListener('pointerup', onEnd);
   card.addEventListener('pointercancel', onEnd);
 }
+
+// Señal implícita por tiempo de lectura (más débil que un like/dismiss explícito):
+// la nota abre en el sitio del medio, no dentro de la app, así que no puedo medir el
+// tiempo de lectura real — aproximo con cuánto tardó en volver a esta pestaña.
+const DWELL_SHORT_SECONDS = 8; // volvió muy rápido -> probablemente no le interesó
+const DWELL_LONG_SECONDS = 25; // tardó bastante -> probablemente la leyó
+let pendingDwell = null;
+
+function trackReadDwell(articleId) {
+  pendingDwell = { articleId, clickedAt: Date.now() };
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !pendingDwell) return;
+  const { articleId, clickedAt } = pendingDwell;
+  pendingDwell = null;
+  const seconds = (Date.now() - clickedAt) / 1000;
+  if (seconds < DWELL_SHORT_SECONDS) {
+    recordInteraction(articleId, 'implicit_dismiss');
+  } else if (seconds >= DWELL_LONG_SECONDS) {
+    recordInteraction(articleId, 'implicit_like');
+  }
+  // zona ambigua (entre corto y largo): no se manda señal, es muy incierto qué pasó
+});
 
 function recordInteraction(articleId, action) {
   fetch(`${SUPABASE_URL}/rest/v1/rpc/news_record_interaction`, {
