@@ -738,7 +738,9 @@ let singleTapTimer = null;
 
 stageEl.addEventListener('pointerdown', (e) => {
   if (e.target.closest('a.read-more')) return;
-  if (!cards.current) return;
+  // Sin "if (!cards.current)": si el tema se quedó sin notas no hay carta que arrastrar
+  // verticalmente, pero el swipe horizontal para escapar a otra categoría tiene que
+  // seguir funcionando igual (si no, quedás atrapado en un tema vacío).
   dragging = true;
   moved = false;
   axis = null;
@@ -755,7 +757,7 @@ stageEl.addEventListener('pointerdown', (e) => {
 });
 
 stageEl.addEventListener('pointermove', (e) => {
-  if (!dragging || !cards.current) return;
+  if (!dragging) return;
   dx = e.clientX - startX;
   dy = e.clientY - startY;
   if (!moved && (Math.abs(dx) > TAP_MOVE_THRESHOLD || Math.abs(dy) > TAP_MOVE_THRESHOLD)) {
@@ -765,7 +767,7 @@ stageEl.addEventListener('pointermove', (e) => {
   if (!moved) return;
   if (axis === 'vertical') {
     positionCards(dy, false);
-  } else {
+  } else if (cards.current) {
     cards.current.style.transition = 'none';
     cards.current.style.transform = `translateX(${dx}px)`;
     cards.current.style.opacity = String(clamp(1 - Math.abs(dx) / 500, 0.4, 1));
@@ -794,15 +796,16 @@ function handleTap(x, y) {
 }
 
 function onPointerEnd(e) {
-  if (!dragging || !cards.current) return;
+  if (!dragging) return;
   dragging = false;
 
   if (!moved) {
-    handleTap(e.clientX, e.clientY);
+    if (cards.current) handleTap(e.clientX, e.clientY);
     return;
   }
 
   if (axis === 'vertical') {
+    if (!cards.current) return; // nada que avanzar sin carta
     if (dy < -SWIPE_UP_THRESHOLD) {
       commitAdvance(1);
     } else if (dy > SWIPE_UP_THRESHOLD) {
@@ -816,7 +819,7 @@ function onPointerEnd(e) {
       switchCategory(currentCategoryIndex + 1); // izquierda -> siguiente categoría
     } else if (dx > SWIPE_SIDE_THRESHOLD) {
       switchCategory(currentCategoryIndex - 1); // derecha -> categoría anterior
-    } else {
+    } else if (card) {
       card.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
       card.style.transform = '';
       card.style.opacity = '';
