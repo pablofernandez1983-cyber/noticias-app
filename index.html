@@ -55,9 +55,23 @@
     cursor: pointer;
   }
   .header-actions button:active { opacity: 0.7; }
+  #categoryDots {
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0 0.4rem;
+    background: var(--bg);
+  }
+  #categoryDots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+  #categoryDots span.active { background: var(--gold); }
   #stage {
     position: relative;
-    height: calc(100% - 52px);
+    height: calc(100% - 52px - 22px);
     overflow: hidden;
     touch-action: none;
   }
@@ -227,12 +241,13 @@
 </head>
 <body>
 <header>
-  <h1>Noticias</h1>
+  <h1 id="categoryTitle">Noticias</h1>
   <div class="header-actions">
     <button id="settingsBtn" type="button">⚙</button>
     <button id="refresh" type="button">↻</button>
   </div>
 </header>
+<div id="categoryDots"></div>
 <div id="stage">
   <div id="cardLayer"></div>
   <div id="status"></div>
@@ -251,7 +266,8 @@ const SUPABASE_URL = 'https://zqwkznlgbkofsrygqezk.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpxd2t6bmxnYmtvZnNyeWdxZXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MTAzMTAsImV4cCI6MjA5MTA4NjMxMH0.GNt-G_RUcxLYCpSqAKKI4KxNU87bBEQAJVCr88R2wQE';
 const FEED_LIMIT = 30;
 const PREFETCH_WHEN_LEFT = 5; // pedir más cuando queden pocas notas en la cola
-const SWIPE_UP_THRESHOLD = 80; // px para que el gesto cuente como swipe (no tap)
+const SWIPE_UP_THRESHOLD = 80; // px para que el gesto cuente como swipe vertical (no tap)
+const SWIPE_SIDE_THRESHOLD = 80; // px para que el gesto cuente como cambio de categoría
 const TAP_MOVE_THRESHOLD = 12; // px de movimiento máximo para que siga contando como tap
 const DOUBLE_TAP_MS = 320;
 const DOUBLE_TAP_MAX_DIST = 60; // px entre el 1er y 2do tap para contar como doble tap
@@ -271,6 +287,14 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsOverlay = document.getElementById('settingsOverlay');
 const settingsBody = document.getElementById('settingsBody');
 const settingsClose = document.getElementById('settingsClose');
+const categoryTitleEl = document.getElementById('categoryTitle');
+const categoryDotsEl = document.getElementById('categoryDots');
+
+// "Para vos" (feed general) + las categorías detectadas de tus intereses (news_interest_seeds).
+// Swipe horizontal (izquierda/derecha) navega entre estas, como pasar de "Para ti" a
+// "Siguiendo" en TikTok — acá en vez de gente que seguís, son tus 4 temas de interés.
+let categories = [{ id: null, short_label: 'Noticias' }];
+let currentCategoryIndex = 0;
 
 let queue = [];
 let seenIds = new Set();
@@ -291,8 +315,41 @@ function setStatus(text) {
   statusEl.style.display = text ? 'flex' : 'none';
 }
 
+async function loadCategories() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/news_interest_seeds?select=id,short_label&order=id.asc`, {
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+    });
+    const seeds = await res.json();
+    if (Array.isArray(seeds) && seeds.length) {
+      categories = [{ id: null, short_label: 'Para vos' }, ...seeds];
+    }
+  } catch (err) {
+    console.warn('no se pudieron cargar las categorías', err);
+  }
+  renderCategoryDots();
+  updateCategoryHeader();
+}
+
+function renderCategoryDots() {
+  categoryDotsEl.innerHTML = '';
+  if (categories.length <= 1) return;
+  categories.forEach((_, i) => {
+    const dot = document.createElement('span');
+    if (i === currentCategoryIndex) dot.className = 'active';
+    categoryDotsEl.appendChild(dot);
+  });
+}
+
+function updateCategoryHeader() {
+  categoryTitleEl.textContent = categories[currentCategoryIndex]?.short_label ?? 'Noticias';
+  renderCategoryDots();
+}
+
 async function fetchBatch() {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}`, {
+  const seedId = categories[currentCategoryIndex]?.id;
+  const seedParam = seedId != null ? `&seed_id=${seedId}` : '';
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}${seedParam}`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
   });
   const data = await res.json();
@@ -320,8 +377,10 @@ async function loadMore() {
   }
 }
 
-async function start() {
+async function loadCategoryFeed() {
   setStatus('Cargando...');
+  cardLayerEl.innerHTML = '';
+  cards = { prev: null, current: null, next: null };
   queue = [];
   seenIds = new Set();
   currentIndex = -1;
@@ -332,11 +391,29 @@ async function start() {
     return;
   }
   if (!queue.length) {
-    setStatus('No hay noticias recientes todavía. news-sync corre cada 30-60 min.');
+    const label = categories[currentCategoryIndex]?.short_label ?? '';
+    setStatus(
+      currentCategoryIndex === 0
+        ? 'No hay noticias recientes todavía. news-sync corre cada 30-60 min.'
+        : `Todavía no hay suficientes notas de "${label}". Probá "Para vos" o volvé más tarde.`
+    );
     return;
   }
   setStatus('');
   rebuildStack(0);
+}
+
+function switchCategory(newIndex) {
+  const clamped = clamp(newIndex, 0, categories.length - 1);
+  if (clamped === currentCategoryIndex) return;
+  currentCategoryIndex = clamped;
+  updateCategoryHeader();
+  loadCategoryFeed();
+}
+
+async function start() {
+  await loadCategories();
+  await loadCategoryFeed();
 }
 
 function buildCardAt(index) {
@@ -425,7 +502,7 @@ function renderFullcard(item) {
 
   const hint = document.createElement('div');
   hint.className = 'swipe-hint';
-  hint.textContent = '▲ deslizá para la próxima · toque para leer · doble toque = me gusta';
+  hint.textContent = '▲ próxima · ◀▶ categorías · toque = leer · doble toque = me gusta';
   card.appendChild(hint);
 
   return card;
@@ -533,11 +610,15 @@ function likeCurrentArticle() {
 }
 
 // Gestos, todos desde cualquier punto de la card (no solo botones):
-// - drag vertical: swipe (arriba = siguiente, abajo = anterior)
+// - drag vertical: swipe entre notas (arriba = siguiente, abajo = anterior)
+// - drag horizontal: cambia de categoría (izquierda = siguiente, derecha = anterior)
 // - tap simple (sin drag): abre la nota completa
 // - doble tap (sin drag): like explícito + corazón, sin abrir nada
+// El eje se decide una sola vez, apenas el gesto supera el umbral de "no es tap", y
+// queda fijo el resto del gesto (si no, un drag diagonal saltaría entre los dos modos).
 let dragging = false;
 let startX = 0, startY = 0, dx = 0, dy = 0, moved = false;
+let axis = null; // 'vertical' | 'horizontal'
 let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
 let singleTapTimer = null;
 
@@ -546,6 +627,7 @@ stageEl.addEventListener('pointerdown', (e) => {
   if (!cards.current) return;
   dragging = true;
   moved = false;
+  axis = null;
   startX = e.clientX;
   startY = e.clientY;
   dx = 0;
@@ -562,8 +644,18 @@ stageEl.addEventListener('pointermove', (e) => {
   if (!dragging || !cards.current) return;
   dx = e.clientX - startX;
   dy = e.clientY - startY;
-  if (Math.abs(dx) > TAP_MOVE_THRESHOLD || Math.abs(dy) > TAP_MOVE_THRESHOLD) moved = true;
-  if (moved) positionCards(dy, false);
+  if (!moved && (Math.abs(dx) > TAP_MOVE_THRESHOLD || Math.abs(dy) > TAP_MOVE_THRESHOLD)) {
+    moved = true;
+    axis = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+  }
+  if (!moved) return;
+  if (axis === 'vertical') {
+    positionCards(dy, false);
+  } else {
+    cards.current.style.transition = 'none';
+    cards.current.style.transform = `translateX(${dx}px)`;
+    cards.current.style.opacity = String(clamp(1 - Math.abs(dx) / 500, 0.4, 1));
+  }
 });
 
 function handleTap(x, y) {
@@ -596,12 +688,25 @@ function onPointerEnd(e) {
     return;
   }
 
-  if (dy < -SWIPE_UP_THRESHOLD) {
-    commitAdvance(1);
-  } else if (dy > SWIPE_UP_THRESHOLD) {
-    commitAdvance(-1);
-  } else {
-    positionCards(0, true); // no llegó al umbral: rebote de vuelta
+  if (axis === 'vertical') {
+    if (dy < -SWIPE_UP_THRESHOLD) {
+      commitAdvance(1);
+    } else if (dy > SWIPE_UP_THRESHOLD) {
+      commitAdvance(-1);
+    } else {
+      positionCards(0, true); // no llegó al umbral: rebote de vuelta
+    }
+  } else if (axis === 'horizontal') {
+    const card = cards.current;
+    if (dx < -SWIPE_SIDE_THRESHOLD) {
+      switchCategory(currentCategoryIndex + 1); // izquierda -> siguiente categoría
+    } else if (dx > SWIPE_SIDE_THRESHOLD) {
+      switchCategory(currentCategoryIndex - 1); // derecha -> categoría anterior
+    } else {
+      card.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+      card.style.transform = '';
+      card.style.opacity = '';
+    }
   }
 }
 
