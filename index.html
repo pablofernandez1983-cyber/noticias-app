@@ -36,6 +36,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.5rem;
   }
   header h1 {
     font-size: 1.1rem;
@@ -43,7 +44,8 @@
     color: var(--gold);
     letter-spacing: 0.02em;
   }
-  #refresh {
+  .header-actions { display: flex; gap: 0.5rem; }
+  .header-actions button {
     background: none;
     border: 1px solid var(--border);
     color: var(--text);
@@ -52,7 +54,7 @@
     font-size: 0.82rem;
     cursor: pointer;
   }
-  #refresh:active { opacity: 0.7; }
+  .header-actions button:active { opacity: 0.7; }
   #stage {
     position: relative;
     height: calc(100% - 52px);
@@ -67,17 +69,18 @@
     padding: 1.4rem 1.3rem 1.6rem;
     background: var(--card);
     user-select: none;
+    touch-action: none;
   }
   .meta {
     display: flex;
     gap: 0.5rem;
     align-items: center;
     flex-wrap: wrap;
-    font-size: 0.74rem;
+    font-size: 0.78rem;
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    margin-bottom: 1rem;
+    margin-bottom: 1.1rem;
   }
   .source {
     background: var(--border);
@@ -88,38 +91,55 @@
   }
   .fullcard .title {
     color: var(--text);
-    font-size: 1.5rem;
+    font-size: clamp(1.6rem, 5.5vw, 2.3rem);
     font-weight: 700;
-    line-height: 1.32;
-    margin: 0 0 1rem;
+    line-height: 1.28;
+    margin: 0 0 1.1rem;
   }
   .fullcard .summary {
     color: var(--muted);
-    font-size: 1.02rem;
+    font-size: clamp(1.05rem, 3.4vw, 1.4rem);
     line-height: 1.5;
     margin: 0;
-    overflow-y: auto;
     flex: 1;
+    touch-action: none;
   }
   .read-more {
     display: block;
     text-align: center;
     margin-top: 1.2rem;
-    padding: 0.85rem 0;
+    padding: 0.9rem 0;
     border-radius: 10px;
     border: 1px solid var(--gold);
     color: var(--gold);
     text-decoration: none;
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 600;
+    touch-action: manipulation;
   }
   .read-more:active { opacity: 0.7; }
   .swipe-hint {
     text-align: center;
     font-size: 0.72rem;
     color: var(--muted);
-    opacity: 0.65;
-    margin-top: 0.7rem;
+    opacity: 0.6;
+    margin-top: 0.8rem;
+  }
+  .heart-burst {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7rem;
+    pointer-events: none;
+    animation: heartPop 0.75s ease forwards;
+  }
+  @keyframes heartPop {
+    0% { transform: scale(0.3); opacity: 0; }
+    18% { transform: scale(1.2); opacity: 1; }
+    35% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1); opacity: 0; }
   }
   #status {
     position: absolute;
@@ -132,15 +152,93 @@
     padding: 2rem;
     font-size: 0.95rem;
   }
+  #settingsOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 50;
+  }
+  #settingsOverlay.open { display: flex; }
+  #settingsPanel {
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+    max-width: 480px;
+    max-height: 82vh;
+    overflow-y: auto;
+    padding: 1.2rem 1.3rem 1.6rem;
+  }
+  #settingsPanel h2 {
+    margin: 0 0 0.8rem;
+    color: var(--gold);
+    font-size: 1.05rem;
+  }
+  #settingsPanel h3 {
+    margin: 1.1rem 0 0.3rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .source-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.95rem;
+  }
+  .source-row input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--gold); }
+  #addSourceForm { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.6rem; }
+  #addSourceForm input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.92rem;
+  }
+  #addSourceForm button {
+    padding: 0.65rem;
+    border-radius: 8px;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    background: transparent;
+    font-weight: 600;
+  }
+  .settings-hint { color: var(--muted); font-size: 0.78rem; margin-top: 0.8rem; }
+  #settingsClose {
+    display: block;
+    margin: 1.1rem auto 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
 </style>
 </head>
 <body>
 <header>
   <h1>Noticias</h1>
-  <button id="refresh" type="button">↻ actualizar</button>
+  <div class="header-actions">
+    <button id="settingsBtn" type="button">⚙</button>
+    <button id="refresh" type="button">↻</button>
+  </div>
 </header>
 <div id="stage">
   <div id="status"></div>
+</div>
+
+<div id="settingsOverlay">
+  <div id="settingsPanel">
+    <h2>Fuentes</h2>
+    <div id="settingsBody">Cargando...</div>
+    <button id="settingsClose" type="button">Cerrar</button>
+  </div>
 </div>
 
 <script>
@@ -148,7 +246,11 @@ const SUPABASE_URL = 'https://zqwkznlgbkofsrygqezk.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpxd2t6bmxnYmtvZnNyeWdxZXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MTAzMTAsImV4cCI6MjA5MTA4NjMxMH0.GNt-G_RUcxLYCpSqAKKI4KxNU87bBEQAJVCr88R2wQE';
 const FEED_LIMIT = 30;
 const PREFETCH_WHEN_LEFT = 5; // pedir más cuando queden pocas notas en la cola
-const SWIPE_UP_THRESHOLD = 80; // px para que el gesto cuente como "siguiente"
+const SWIPE_UP_THRESHOLD = 80; // px para que el gesto cuente como swipe (no tap)
+const TAP_MOVE_THRESHOLD = 12; // px de movimiento máximo para que siga contando como tap
+const DOUBLE_TAP_MS = 320;
+const DOUBLE_TAP_MAX_DIST = 60; // px entre el 1er y 2do tap para contar como doble tap
+const SINGLE_TAP_DELAY_MS = 280; // espera antes de confirmar tap simple (por si viene el 2do)
 
 // Umbrales de la señal implícita por velocidad de swipe (tiempo en pantalla antes de deslizar).
 // La pasó volando (no le interesó ni el título) -> dismiss graduado, más fuerte cuanto más rápido.
@@ -159,15 +261,10 @@ const SLOW_READ_SECONDS = 4;
 const stageEl = document.getElementById('stage');
 const statusEl = document.getElementById('status');
 const refreshBtn = document.getElementById('refresh');
-
-const SOURCE_LABELS = {
-  clarin: 'Clarín',
-  lanacion: 'La Nación',
-  iprofesional: 'iProfesional',
-  infobae: 'Infobae',
-  ambito: 'Ámbito',
-  tn: 'TN',
-};
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsOverlay = document.getElementById('settingsOverlay');
+const settingsBody = document.getElementById('settingsBody');
+const settingsClose = document.getElementById('settingsClose');
 
 let queue = [];
 let seenIds = new Set();
@@ -252,7 +349,7 @@ function renderFullcard(item) {
   meta.className = 'meta';
   const source = document.createElement('span');
   source.className = 'source';
-  source.textContent = SOURCE_LABELS[item.source] || item.source;
+  source.textContent = item.source_label || item.source;
   meta.appendChild(source);
   if (item.topic_label) {
     const topic = document.createElement('span');
@@ -284,7 +381,7 @@ function renderFullcard(item) {
 
   const hint = document.createElement('div');
   hint.className = 'swipe-hint';
-  hint.textContent = '▲ deslizá para la próxima';
+  hint.textContent = '▲ deslizá para la próxima · toque para leer · doble toque = me gusta';
   card.appendChild(hint);
 
   return card;
@@ -328,34 +425,97 @@ function recordInteraction(articleId, action, weight) {
   }).catch(() => {});
 }
 
-// Swipe vertical: arriba = siguiente, abajo = anterior. La velocidad no se mide en px/ms
-// del gesto en sí, sino en cuánto tiempo estuvo la nota en pantalla antes del swipe (eso
-// es lo que realmente indica si la leyó o la pasó de largo).
+function showHeartBurst() {
+  if (!currentCard) return;
+  const heart = document.createElement('div');
+  heart.className = 'heart-burst';
+  heart.textContent = '❤️';
+  currentCard.appendChild(heart);
+  heart.addEventListener('animationend', () => heart.remove());
+}
+
+function openCurrentArticle() {
+  const item = queue[currentIndex];
+  if (!item) return;
+  recordInteraction(item.id, 'like');
+  window.open(item.url, '_blank', 'noopener');
+}
+
+function likeCurrentArticle() {
+  const item = queue[currentIndex];
+  if (!item) return;
+  recordInteraction(item.id, 'like');
+  showHeartBurst();
+}
+
+// Gestos, todos desde cualquier punto de la card (no solo botones):
+// - drag vertical: swipe (arriba = siguiente, abajo = anterior)
+// - tap simple (sin drag): abre la nota completa
+// - doble tap (sin drag): like explícito + corazón, sin abrir nada
 let dragging = false;
-let startY = 0;
-let dy = 0;
+let startX = 0, startY = 0, dx = 0, dy = 0, moved = false;
+let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+let singleTapTimer = null;
 
 stageEl.addEventListener('pointerdown', (e) => {
   if (e.target.closest('a.read-more')) return;
   if (!currentCard) return;
   dragging = true;
+  moved = false;
+  startX = e.clientX;
   startY = e.clientY;
+  dx = 0;
   dy = 0;
   currentCard.style.transition = 'none';
-  stageEl.setPointerCapture(e.pointerId);
+  try {
+    stageEl.setPointerCapture(e.pointerId);
+  } catch (_err) {
+    // algunos navegadores/gestos no dejan capturar el puntero; el drag sigue funcionando igual
+  }
 });
 
 stageEl.addEventListener('pointermove', (e) => {
   if (!dragging || !currentCard) return;
+  dx = e.clientX - startX;
   dy = e.clientY - startY;
-  currentCard.style.transform = `translateY(${dy}px)`;
-  currentCard.style.opacity = String(clamp(1 - Math.abs(dy) / 500, 0.4, 1));
+  if (Math.abs(dx) > TAP_MOVE_THRESHOLD || Math.abs(dy) > TAP_MOVE_THRESHOLD) moved = true;
+  if (moved) {
+    currentCard.style.transform = `translateY(${dy}px)`;
+    currentCard.style.opacity = String(clamp(1 - Math.abs(dy) / 500, 0.4, 1));
+  }
 });
 
-function onPointerEnd() {
+function handleTap(x, y) {
+  const now = Date.now();
+  const dist = Math.hypot(x - lastTapX, y - lastTapY);
+  if (now - lastTapTime < DOUBLE_TAP_MS && dist < DOUBLE_TAP_MAX_DIST) {
+    if (singleTapTimer) {
+      clearTimeout(singleTapTimer);
+      singleTapTimer = null;
+    }
+    lastTapTime = 0;
+    likeCurrentArticle();
+    return;
+  }
+  lastTapTime = now;
+  lastTapX = x;
+  lastTapY = y;
+  singleTapTimer = setTimeout(() => {
+    singleTapTimer = null;
+    openCurrentArticle();
+  }, SINGLE_TAP_DELAY_MS);
+}
+
+function onPointerEnd(e) {
   if (!dragging || !currentCard) return;
   dragging = false;
   const card = currentCard;
+
+  if (!moved) {
+    handleTap(e.clientX, e.clientY);
+    return;
+  }
+
   card.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
   if (dy < -SWIPE_UP_THRESHOLD) {
     card.style.transform = 'translateY(-100%)';
@@ -382,6 +542,142 @@ stageEl.addEventListener('wheel', (e) => {
   wheelLock = true;
   advance(e.deltaY > 0 ? 1 : -1);
   setTimeout(() => { wheelLock = false; }, 350);
+});
+
+// Panel de configuración: activar/desactivar fuentes y agregar RSS propio
+function slugify(label) {
+  const base = label
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return base || `fuente_${Date.now()}`;
+}
+
+function sourcesHeaders(extra) {
+  return Object.assign({ apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` }, extra || {});
+}
+
+function toggleSource(slug, enabled) {
+  fetch(`${SUPABASE_URL}/rest/v1/news_sources?slug=eq.${encodeURIComponent(slug)}`, {
+    method: 'PATCH',
+    headers: sourcesHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ enabled }),
+  }).catch(() => {});
+}
+
+function renderSourceRow(s) {
+  const row = document.createElement('label');
+  row.className = 'source-row';
+  const span = document.createElement('span');
+  span.textContent = s.label;
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = s.enabled;
+  input.addEventListener('change', () => toggleSource(s.slug, input.checked));
+  row.appendChild(span);
+  row.appendChild(input);
+  return row;
+}
+
+function renderAddForm() {
+  const form = document.createElement('form');
+  form.id = 'addSourceForm';
+
+  const labelInput = document.createElement('input');
+  labelInput.placeholder = 'Nombre (ej: Página 12)';
+  labelInput.required = true;
+
+  const urlInput = document.createElement('input');
+  urlInput.placeholder = 'URL del RSS';
+  urlInput.type = 'url';
+  urlInput.required = true;
+
+  const btn = document.createElement('button');
+  btn.type = 'submit';
+  btn.textContent = 'Agregar';
+
+  form.appendChild(labelInput);
+  form.appendChild(urlInput);
+  form.appendChild(btn);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const label = labelInput.value.trim();
+    const url = urlInput.value.trim();
+    if (!label || !url) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/news_sources`, {
+        method: 'POST',
+        headers: sourcesHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+        body: JSON.stringify({ slug: slugify(label), label, url, enabled: true }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      labelInput.value = '';
+      urlInput.value = '';
+      openSettings();
+    } catch (err) {
+      alert('No se pudo agregar (¿ya existe una fuente con ese nombre?)');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  return form;
+}
+
+async function openSettings() {
+  settingsOverlay.classList.add('open');
+  settingsBody.textContent = 'Cargando...';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/news_sources?select=*&order=label.asc`, {
+      headers: sourcesHeaders(),
+    });
+    const sources = await res.json();
+    renderSettings(sources);
+  } catch (err) {
+    settingsBody.textContent = 'No se pudo cargar la lista de fuentes.';
+  }
+}
+
+function renderSettings(sources) {
+  settingsBody.innerHTML = '';
+  const active = sources.filter((s) => s.enabled);
+  const suggested = sources.filter((s) => !s.enabled);
+
+  const h1 = document.createElement('h3');
+  h1.textContent = 'Activas';
+  settingsBody.appendChild(h1);
+  for (const s of active) settingsBody.appendChild(renderSourceRow(s));
+
+  const h2 = document.createElement('h3');
+  h2.textContent = 'Sugeridas';
+  settingsBody.appendChild(h2);
+  if (!suggested.length) {
+    const p = document.createElement('p');
+    p.className = 'settings-hint';
+    p.textContent = 'No hay más sugerencias por ahora.';
+    settingsBody.appendChild(p);
+  }
+  for (const s of suggested) settingsBody.appendChild(renderSourceRow(s));
+
+  const h3 = document.createElement('h3');
+  h3.textContent = 'Agregar RSS propio';
+  settingsBody.appendChild(h3);
+  settingsBody.appendChild(renderAddForm());
+
+  const hint = document.createElement('p');
+  hint.className = 'settings-hint';
+  hint.textContent = 'Los cambios se aplican en la próxima sincronización (cada 30-60 min).';
+  settingsBody.appendChild(hint);
+}
+
+settingsBtn.addEventListener('click', openSettings);
+settingsClose.addEventListener('click', () => settingsOverlay.classList.remove('open'));
+settingsOverlay.addEventListener('click', (e) => {
+  if (e.target === settingsOverlay) settingsOverlay.classList.remove('open');
 });
 
 refreshBtn.addEventListener('click', start);
