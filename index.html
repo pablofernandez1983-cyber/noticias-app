@@ -65,8 +65,19 @@
     padding: 0.9rem 1rem;
     margin-bottom: 0.75rem;
     transition: opacity 0.15s ease, transform 0.15s ease;
+    touch-action: pan-y;
+    user-select: none;
   }
   .card.leaving { opacity: 0; transform: translateY(-6px); }
+  .card.swipe-like { box-shadow: inset 0 0 0 2px var(--gold); }
+  .card.swipe-dismiss { box-shadow: inset 0 0 0 2px var(--danger); }
+  .card .swipe-hint {
+    text-align: center;
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin: -0.15rem 0 0.6rem;
+    opacity: 0.7;
+  }
   .meta {
     display: flex;
     gap: 0.5rem;
@@ -248,6 +259,13 @@ function renderCard(item) {
   actions.appendChild(dismissBtn);
 
   card.appendChild(actions);
+
+  const hint = document.createElement('div');
+  hint.className = 'swipe-hint';
+  hint.textContent = '◀ deslizá para descartar · deslizá para guardar ▶';
+  card.appendChild(hint);
+
+  attachSwipe(card, item);
   return card;
 }
 
@@ -255,6 +273,62 @@ function handleAction(articleId, action, card) {
   recordInteraction(articleId, action);
   card.classList.add('leaving');
   setTimeout(() => card.remove(), 150);
+}
+
+const SWIPE_THRESHOLD = 100;
+
+function attachSwipe(card, item) {
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let dx = 0;
+
+  function reset() {
+    card.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
+    card.style.transform = '';
+    card.style.opacity = '';
+    card.classList.remove('swipe-like', 'swipe-dismiss');
+  }
+
+  function flyOut(direction) {
+    card.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+    card.style.transform = `translateX(${direction * 700}px) rotate(${direction * 20}deg)`;
+    card.style.opacity = '0';
+    recordInteraction(item.id, direction > 0 ? 'like' : 'dismiss');
+    setTimeout(() => card.remove(), 200);
+  }
+
+  card.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button, a.title')) return; // no interferir con tap en botones/link
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    dx = 0;
+    card.style.transition = 'none';
+    card.setPointerCapture(e.pointerId);
+  });
+
+  card.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (Math.abs(dy) > Math.abs(dx) * 1.5) return; // gesto vertical (scroll): no interferir
+    card.style.transform = `translateX(${dx}px) rotate(${dx / 20}deg)`;
+    card.style.opacity = String(Math.max(0.35, 1 - Math.abs(dx) / 500));
+    card.classList.toggle('swipe-like', dx > 30);
+    card.classList.toggle('swipe-dismiss', dx < -30);
+  });
+
+  function onEnd() {
+    if (!dragging) return;
+    dragging = false;
+    if (dx > SWIPE_THRESHOLD) flyOut(1);
+    else if (dx < -SWIPE_THRESHOLD) flyOut(-1);
+    else reset();
+  }
+
+  card.addEventListener('pointerup', onEnd);
+  card.addEventListener('pointercancel', onEnd);
 }
 
 function recordInteraction(articleId, action) {
