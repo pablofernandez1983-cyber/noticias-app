@@ -3,17 +3,21 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Noticias</title>
+<title>NotiTok</title>
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icon-192.png" />
 <link rel="apple-touch-icon" href="icon-192.png" />
-<meta name="theme-color" content="#12213a" />
+<meta name="theme-color" content="#0c1424" />
 <style>
   :root {
     --bg: #0c1424;
     --card: #16233a;
     --border: #263453;
-    --gold: #e8c468;
+    /* Paleta NotiTok: rosa/rojo -> violeta -> celeste, tomada del logo */
+    --accent: #fc2454;
+    --accent-2: #8b3cd8;
+    --accent-3: #18b4f0;
+    --accent-gradient: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
     --text: #eef1f6;
     --muted: #9aa7bd;
     --danger: #e0685f;
@@ -41,7 +45,7 @@
   header h1 {
     font-size: 1.1rem;
     margin: 0;
-    color: var(--gold);
+    color: var(--accent);
     letter-spacing: 0.02em;
   }
   .header-actions { display: flex; gap: 0.5rem; }
@@ -68,7 +72,7 @@
     border-radius: 50%;
     background: var(--border);
   }
-  #categoryDots span.active { background: var(--gold); }
+  #categoryDots span.active { background: var(--accent-gradient); }
   #stage {
     position: relative;
     height: calc(100% - 52px - 22px);
@@ -102,7 +106,7 @@
   }
   .source {
     background: var(--border);
-    color: var(--gold);
+    color: var(--accent);
     padding: 0.15rem 0.6rem;
     border-radius: 999px;
     font-weight: 600;
@@ -128,8 +132,9 @@
     margin-top: 1.2rem;
     padding: 0.9rem 0;
     border-radius: 10px;
-    border: 1px solid var(--gold);
-    color: var(--gold);
+    border: none;
+    background: var(--accent-gradient);
+    color: #fff;
     text-decoration: none;
     font-size: 1rem;
     font-weight: 600;
@@ -192,7 +197,7 @@
   }
   #settingsPanel h2 {
     margin: 0 0 0.8rem;
-    color: var(--gold);
+    color: var(--accent);
     font-size: 1.05rem;
   }
   #settingsPanel h3 {
@@ -210,7 +215,7 @@
     border-bottom: 1px solid var(--border);
     font-size: 0.95rem;
   }
-  .source-row input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--gold); }
+  .source-row input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--accent); }
   #addSourceForm { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.6rem; }
   #addSourceForm input {
     background: var(--bg);
@@ -223,8 +228,8 @@
   #addSourceForm button {
     padding: 0.65rem;
     border-radius: 8px;
-    border: 1px solid var(--gold);
-    color: var(--gold);
+    border: 1px solid var(--accent);
+    color: var(--accent);
     background: transparent;
     font-weight: 600;
   }
@@ -249,15 +254,15 @@
   }
   #userOverlay.open { display: flex; }
   #userPanel { width: 100%; max-width: 360px; text-align: center; }
-  #userPanel h2 { color: var(--gold); margin: 0 0 0.4rem; font-size: 1.3rem; }
+  #userPanel h2 { color: var(--accent); margin: 0 0 0.4rem; font-size: 1.3rem; }
   #userPanel p { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.4rem; }
   #userPabloBtn {
     width: 100%;
     padding: 0.9rem;
     border-radius: 10px;
-    border: 1px solid var(--gold);
-    background: var(--gold);
-    color: #1a1305;
+    border: none;
+    background: var(--accent-gradient);
+    color: #fff;
     font-weight: 700;
     font-size: 1rem;
     margin-bottom: 1.2rem;
@@ -296,7 +301,7 @@
 </head>
 <body>
 <header>
-  <h1 id="categoryTitle">Noticias</h1>
+  <h1 id="categoryTitle">NotiTok</h1>
   <div class="header-actions">
     <button id="settingsBtn" type="button">⚙</button>
     <button id="refresh" type="button">↻</button>
@@ -406,7 +411,7 @@ function ensureUsuario() {
 // "Para vos" (feed general) + las categorías detectadas de tus intereses (news_interest_seeds).
 // Swipe horizontal (izquierda/derecha) navega entre estas, como pasar de "Para ti" a
 // "Siguiendo" en TikTok — acá en vez de gente que seguís, son tus 4 temas de interés.
-let categories = [{ id: null, short_label: 'Noticias' }];
+let categories = [{ id: null, short_label: 'NotiTok' }];
 let currentCategoryIndex = 0;
 
 let queue = [];
@@ -455,7 +460,7 @@ function renderCategoryDots() {
 }
 
 function updateCategoryHeader() {
-  categoryTitleEl.textContent = categories[currentCategoryIndex]?.short_label ?? 'Noticias';
+  categoryTitleEl.textContent = categories[currentCategoryIndex]?.short_label ?? 'NotiTok';
   renderCategoryDots();
 }
 
