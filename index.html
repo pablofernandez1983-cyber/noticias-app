@@ -45,8 +45,12 @@
   header h1 {
     font-size: 1.1rem;
     margin: 0;
-    color: var(--accent);
+    font-weight: 700;
     letter-spacing: 0.02em;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
   .header-actions { display: flex; gap: 0.5rem; }
   .header-actions button {
@@ -105,8 +109,8 @@
     margin-bottom: 1.1rem;
   }
   .source {
-    background: var(--border);
-    color: var(--accent);
+    background: var(--accent-gradient);
+    color: #fff;
     padding: 0.15rem 0.6rem;
     border-radius: 999px;
     font-weight: 600;
@@ -197,8 +201,12 @@
   }
   #settingsPanel h2 {
     margin: 0 0 0.8rem;
-    color: var(--accent);
     font-size: 1.05rem;
+    font-weight: 700;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
   #settingsPanel h3 {
     margin: 1.1rem 0 0.3rem;
@@ -228,9 +236,9 @@
   #addSourceForm button {
     padding: 0.65rem;
     border-radius: 8px;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    background: transparent;
+    border: none;
+    color: #fff;
+    background: var(--accent-gradient);
     font-weight: 600;
   }
   .settings-hint { color: var(--muted); font-size: 0.78rem; margin-top: 0.8rem; }
@@ -254,7 +262,15 @@
   }
   #userOverlay.open { display: flex; }
   #userPanel { width: 100%; max-width: 360px; text-align: center; }
-  #userPanel h2 { color: var(--accent); margin: 0 0 0.4rem; font-size: 1.3rem; }
+  #userPanel h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1.3rem;
+    font-weight: 700;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
   #userPanel p { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.4rem; }
   #userPabloBtn {
     width: 100%;
@@ -423,6 +439,13 @@ let currentIndex = -1;
 let cards = { prev: null, current: null, next: null };
 let shownAt = 0;
 let loadingMore = false;
+// Se incrementa en cada loadCategoryFeed(). queue/seenIds/currentIndex son estado global
+// compartido — si el usuario cambia de categoría rápido (ej. Economía -> Fútbol) puede haber
+// dos pedidos en vuelo a la vez, y el de la categoría VIEJA puede resolver después del nuevo
+// (orden de red no garantizado). Sin este token, esa respuesta tardía pisaba la cola ya
+// mostrada de la categoría nueva — el título decía "Fútbol" pero el contenido era de otra
+// categoría (confirmado: notas de "Política económica nacional" apareciendo en Fútbol).
+let categoryToken = 0;
 
 function clamp(x, lo, hi) {
   return Math.max(lo, Math.min(hi, x));
@@ -478,8 +501,10 @@ async function fetchBatch() {
 async function loadMore() {
   if (loadingMore) return;
   loadingMore = true;
+  const token = categoryToken;
   try {
     const batch = await fetchBatch();
+    if (token !== categoryToken) return; // la categoría cambió mientras esperábamos: descartar
     for (const item of batch) {
       if (!seenIds.has(item.id)) {
         seenIds.add(item.id);
@@ -496,17 +521,27 @@ async function loadMore() {
 }
 
 async function loadCategoryFeed() {
+  // Nuevo token: cualquier fetch todavía en vuelo de la categoría anterior queda invalidado
+  // (ver comentario en la declaración de categoryToken más arriba).
+  const token = ++categoryToken;
   setStatus('Cargando...');
   cardLayerEl.innerHTML = '';
   cards = { prev: null, current: null, next: null };
   queue = [];
   seenIds = new Set();
   currentIndex = -1;
+  let batch;
   try {
-    await loadMore();
+    batch = await fetchBatch();
   } catch (err) {
+    if (token !== categoryToken) return; // ya se pidió otra categoría, este error es viejo
     setStatus(`No se pudo cargar el feed (${err.message}). Probá actualizar de nuevo.`);
     return;
+  }
+  if (token !== categoryToken) return; // el usuario ya cambió de categoría antes de que esto resolviera
+  for (const item of batch) {
+    seenIds.add(item.id);
+    queue.push(item);
   }
   if (!queue.length) {
     const label = categories[currentCategoryIndex]?.short_label ?? '';
