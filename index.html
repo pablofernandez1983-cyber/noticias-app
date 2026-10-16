@@ -531,7 +531,46 @@ async function fetchBatch() {
   });
   const data = await res.json();
   if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  lastPending = data.pending || 0;
   return data.feed || [];
+}
+
+// El puntaje con IA corre solo cuando se abre la app (news-rank lo dispara si hay notas sin
+// puntuar). Mientras tanto se ven las ya puntuadas; a los REFRESH_AFTER_SCORING_MS se vuelve a
+// pedir el feed y las notas nuevas se meten justo después de la que se está viendo.
+const REFRESH_AFTER_SCORING_MS = 45000;
+let lastPending = 0;
+let scoringRefreshTimer = null;
+
+function scheduleScoringRefresh() {
+  if (scoringRefreshTimer || !lastPending) return;
+  const token = categoryToken;
+  scoringRefreshTimer = setTimeout(async () => {
+    scoringRefreshTimer = null;
+    if (token !== categoryToken) return;
+    let batch;
+    try {
+      batch = await fetchBatch();
+    } catch {
+      return;
+    }
+    if (token !== categoryToken) return;
+    const fresh = batch.filter((item) => !seenIds.has(item.id));
+    fresh.forEach((item) => seenIds.add(item.id));
+    if (!queue.length) {
+      if (!fresh.length) return;
+      queue.push(...fresh);
+      setStatus('');
+      rebuildStack(0);
+    } else if (fresh.length) {
+      queue.splice(currentIndex + 1, 0, ...fresh);
+      if (cards.next) cards.next.remove();
+      cards.next = buildCardAt(currentIndex + 1);
+      if (cards.next) cardLayerEl.appendChild(cards.next);
+      positionCards(0, false);
+    }
+    scheduleScoringRefresh(); // si todavía quedaba algo pendiente, otra vuelta
+  }, REFRESH_AFTER_SCORING_MS);
 }
 
 async function loadMore() {
@@ -548,6 +587,7 @@ async function loadMore() {
       }
     }
     ensureNextCard();
+    scheduleScoringRefresh();
   } catch (err) {
     // si falla el prefetch en silencio, ya se reintenta la próxima vez que se acerque el final
     console.warn('prefetch falló', err);
@@ -560,6 +600,10 @@ async function loadCategoryFeed() {
   // Nuevo token: cualquier fetch todavía en vuelo de la categoría anterior queda invalidado
   // (ver comentario en la declaración de categoryToken más arriba).
   const token = ++categoryToken;
+  if (scoringRefreshTimer) {
+    clearTimeout(scoringRefreshTimer);
+    scoringRefreshTimer = null;
+  }
   setStatus('Cargando...');
   cardLayerEl.innerHTML = '';
   cards = { prev: null, current: null, next: null };
@@ -579,7 +623,12 @@ async function loadCategoryFeed() {
     seenIds.add(item.id);
     queue.push(item);
   }
+  scheduleScoringRefresh();
   if (!queue.length) {
+    if (lastPending) {
+      setStatus('Puntuando las noticias nuevas... (tarda alrededor de un minuto)');
+      return;
+    }
     const label = categories[currentCategoryIndex]?.short_label ?? '';
     setStatus(
       currentCategoryIndex === 0
