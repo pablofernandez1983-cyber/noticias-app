@@ -445,7 +445,7 @@ function ensureUsuario() {
   });
 }
 
-// "Para vos" (feed general) + las categorías detectadas de tus intereses (news_interest_seeds).
+// "Para vos" (feed general) + las pestañas de news_categories (River, Fútbol, Economía...).
 // Swipe horizontal (izquierda/derecha) navega entre estas, como pasar de "Para ti" a
 // "Siguiendo" en TikTok — acá en vez de gente que seguís, son tus 4 temas de interés.
 let categories = [{ id: null, short_label: 'NotiTok' }];
@@ -479,12 +479,13 @@ function setStatus(text) {
 
 async function loadCategories() {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/news_interest_seeds?select=id,short_label&order=id.asc`, {
+    // Pestañas: news_categories (Gemini asigna las categorías de cada nota en news-score).
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/news_categories?select=slug,short_label&order=sort.asc`, {
       headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
     });
-    const seeds = await res.json();
-    if (Array.isArray(seeds) && seeds.length) {
-      categories = [{ id: null, short_label: 'Para vos' }, ...seeds];
+    const cats = await res.json();
+    if (Array.isArray(cats) && cats.length) {
+      categories = [{ id: null, short_label: 'Para vos' }, ...cats.map((c) => ({ id: c.slug, short_label: c.short_label }))];
     }
   } catch (err) {
     console.warn('no se pudieron cargar las categorías', err);
@@ -509,9 +510,9 @@ function updateCategoryHeader() {
 }
 
 async function fetchBatch() {
-  const seedId = categories[currentCategoryIndex]?.id;
-  const seedParam = seedId != null ? `&seed_id=${seedId}` : '';
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}${seedParam}&usuario=${encodeURIComponent(usuario)}`, {
+  const cat = categories[currentCategoryIndex]?.id;
+  const catParam = cat != null ? `&cat=${encodeURIComponent(cat)}` : '';
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}${catParam}&usuario=${encodeURIComponent(usuario)}`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
   });
   const data = await res.json();
