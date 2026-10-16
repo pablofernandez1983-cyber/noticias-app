@@ -523,10 +523,13 @@ function updateCategoryHeader() {
   renderCategoryDots();
 }
 
-async function fetchBatch() {
+// wait=true (solo en la carga inicial / cambio de pestaña): news-rank primero puntúa rápido las
+// notas más nuevas sin puntaje (unos segundos) y recién después arma el feed.
+async function fetchBatch(wait = false) {
   const cat = categories[currentCategoryIndex]?.id;
   const catParam = cat != null ? `&cat=${encodeURIComponent(cat)}` : '';
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}${catParam}&usuario=${encodeURIComponent(usuario)}`, {
+  const waitParam = wait ? '&wait=1' : '';
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/news-rank?limit=${FEED_LIMIT}${catParam}${waitParam}&usuario=${encodeURIComponent(usuario)}`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
   });
   const data = await res.json();
@@ -538,7 +541,7 @@ async function fetchBatch() {
 // El puntaje con IA corre solo cuando se abre la app (news-rank lo dispara si hay notas sin
 // puntuar). Mientras tanto se ven las ya puntuadas; a los REFRESH_AFTER_SCORING_MS se vuelve a
 // pedir el feed y las notas nuevas se meten justo después de la que se está viendo.
-const REFRESH_AFTER_SCORING_MS = 45000;
+const REFRESH_AFTER_SCORING_MS = 20000;
 let lastPending = 0;
 let scoringRefreshTimer = null;
 
@@ -604,7 +607,7 @@ async function loadCategoryFeed() {
     clearTimeout(scoringRefreshTimer);
     scoringRefreshTimer = null;
   }
-  setStatus('Cargando...');
+  setStatus('Buscando lo nuevo...');
   cardLayerEl.innerHTML = '';
   cards = { prev: null, current: null, next: null };
   queue = [];
@@ -612,7 +615,7 @@ async function loadCategoryFeed() {
   currentIndex = -1;
   let batch;
   try {
-    batch = await fetchBatch();
+    batch = await fetchBatch(true);
   } catch (err) {
     if (token !== categoryToken) return; // ya se pidió otra categoría, este error es viejo
     setStatus(`No se pudo cargar el feed (${err.message}). Probá actualizar de nuevo.`);
