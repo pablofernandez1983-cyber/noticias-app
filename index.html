@@ -242,6 +242,27 @@
     font-weight: 600;
   }
   .settings-hint { color: var(--muted); font-size: 0.78rem; margin-top: 0.8rem; }
+  #profileForm { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+  #profileForm textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    line-height: 1.4;
+    min-height: 220px;
+    resize: vertical;
+  }
+  #profileForm button {
+    padding: 0.65rem;
+    border-radius: 8px;
+    border: none;
+    color: #fff;
+    background: var(--accent-gradient);
+    font-weight: 600;
+  }
   #settingsClose {
     display: block;
     margin: 1.1rem auto 0;
@@ -968,18 +989,76 @@ async function openSettings() {
   settingsOverlay.classList.add('open');
   settingsBody.textContent = 'Cargando...';
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/news_sources?select=*&order=label.asc`, {
-      headers: sourcesHeaders(),
-    });
+    const [res, profile] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/news_sources?select=*&order=label.asc`, { headers: sourcesHeaders() }),
+      fetchProfile(),
+    ]);
     const sources = await res.json();
-    renderSettings(sources);
+    renderSettings(sources, profile);
   } catch (err) {
     settingsBody.textContent = 'No se pudo cargar la lista de fuentes.';
   }
 }
 
-function renderSettings(sources) {
+function profileRpc(fn, body) {
+  return fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function fetchProfile() {
+  try {
+    const res = await profileRpc('news_get_profile', { p_usuario: usuario });
+    return res.ok ? (await res.json()) || '' : '';
+  } catch {
+    return '';
+  }
+}
+
+// Texto libre con lo que le interesa (y lo que no) al usuario: news-score se lo pasa a Gemini
+// para puntuar el interés personal de cada nota, que es lo que más pesa en el ranking.
+function renderProfileForm(profile) {
+  const form = document.createElement('form');
+  form.id = 'profileForm';
+  const ta = document.createElement('textarea');
+  ta.value = profile;
+  ta.placeholder = 'Ej: River sí, horarios de partidos no. Economía con análisis. Nada de chimentos ni policiales...';
+  const btn = document.createElement('button');
+  btn.type = 'submit';
+  btn.textContent = 'Guardar';
+  form.append(ta, btn);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    try {
+      const res = await profileRpc('news_set_profile', { p_usuario: usuario, p_profile: ta.value });
+      if (!res.ok) throw new Error(await res.text());
+      btn.textContent = 'Guardado ✓';
+    } catch {
+      btn.textContent = 'No se pudo guardar';
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => (btn.textContent = 'Guardar'), 2500);
+    }
+  });
+  return form;
+}
+
+function renderSettings(sources, profile) {
   settingsBody.innerHTML = '';
+
+  const hp = document.createElement('h3');
+  hp.textContent = 'Lo que me interesa';
+  settingsBody.appendChild(hp);
+  settingsBody.appendChild(renderProfileForm(profile));
+  const hpHint = document.createElement('p');
+  hpHint.className = 'settings-hint';
+  hpHint.textContent = 'La IA lee esto para puntuar cada nota. Al guardar, se re-puntúan las notas del último día (tarda 1-2 horas en completarse).';
+  settingsBody.appendChild(hpHint);
+
   const active = sources.filter((s) => s.enabled);
   const suggested = sources.filter((s) => !s.enabled);
 
