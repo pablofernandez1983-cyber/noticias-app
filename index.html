@@ -145,6 +145,20 @@
     touch-action: manipulation;
   }
   .read-more:active { opacity: 0.7; }
+  .card-actions { display: flex; gap: 0.6rem; margin-top: 1.2rem; }
+  .card-actions .read-more { flex: 1; margin-top: 0; }
+  .dislike {
+    flex: 0 0 auto;
+    padding: 0.9rem 1rem;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 1rem;
+    font-weight: 600;
+    touch-action: manipulation;
+  }
+  .dislike:active { opacity: 0.7; }
   .swipe-hint {
     text-align: center;
     font-size: 0.72rem;
@@ -674,11 +688,23 @@ function renderFullcard(item) {
   readMore.rel = 'noopener';
   readMore.textContent = 'Leer nota completa ↗';
   readMore.addEventListener('click', () => recordInteraction(item.id, 'like'));
-  card.appendChild(readMore);
+
+  // "No me interesa": voto explícito que news-score usa como ejemplo para aprender el criterio
+  const dislike = document.createElement('button');
+  dislike.type = 'button';
+  dislike.className = 'dislike';
+  dislike.textContent = '👎';
+  dislike.setAttribute('aria-label', 'No me interesa');
+  dislike.addEventListener('click', dislikeCurrentArticle);
+
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+  actions.append(dislike, readMore);
+  card.appendChild(actions);
 
   const hint = document.createElement('div');
   hint.className = 'swipe-hint';
-  hint.textContent = '▲ próxima · ◀▶ categorías · toque = leer · doble toque = me gusta';
+  hint.textContent = '▲ próxima · ◀▶ categorías · doble toque = me gusta · 👎 = no me interesa';
   card.appendChild(hint);
 
   return card;
@@ -697,14 +723,14 @@ function classifyDwell(dwellMs) {
   return null; // zona ambigua: pasó un tiempo intermedio, no queda claro qué significa
 }
 
-function commitAdvance(direction) {
+function commitAdvance(direction, skipDwellSignal = false) {
   const targetIndex = currentIndex + direction;
   if (targetIndex < 0 || targetIndex >= queue.length) {
     positionCards(0, true); // no hay a dónde ir: rebote a la posición neutra
     return;
   }
 
-  if (direction > 0) {
+  if (direction > 0 && !skipDwellSignal) {
     const dwellMs = Date.now() - shownAt;
     const signal = classifyDwell(dwellMs);
     if (signal) recordInteraction(queue[currentIndex].id, signal.action, signal.weight);
@@ -778,6 +804,17 @@ function openCurrentArticle() {
   window.open(item.url, '_blank', 'noopener');
 }
 
+function dislikeCurrentArticle() {
+  const item = queue[currentIndex];
+  if (!item) return;
+  recordInteraction(item.id, 'dismiss', 1);
+  const burst = document.createElement('div');
+  burst.className = 'heart-burst';
+  burst.textContent = '👎';
+  cards.current.appendChild(burst);
+  setTimeout(() => commitAdvance(1, true), 350);
+}
+
 function likeCurrentArticle() {
   const item = queue[currentIndex];
   if (!item) return;
@@ -799,7 +836,7 @@ let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
 let singleTapTimer = null;
 
 stageEl.addEventListener('pointerdown', (e) => {
-  if (e.target.closest('a.read-more')) return;
+  if (e.target.closest('a.read-more, button.dislike')) return;
   // Sin "if (!cards.current)": si el tema se quedó sin notas no hay carta que arrastrar
   // verticalmente, pero el swipe horizontal para escapar a otra categoría tiene que
   // seguir funcionando igual (si no, quedás atrapado en un tema vacío).
